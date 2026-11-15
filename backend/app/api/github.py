@@ -1,9 +1,13 @@
+
 from fastapi import APIRouter, HTTPException, Query
 import httpx
+from app.services.recommendation_service import rank_issues
 
 from app.services.github_service import (
     search_java_repositories,
-    search_beginner_issues
+    search_beginner_issues,
+    CACHE_STATS,
+    REPOSITORY_CACHE
 )
 
 router = APIRouter()
@@ -36,21 +40,46 @@ async def get_repositories(
 
 @router.get("/issues")
 async def get_issues(
-    per_page: int = Query(default=10, ge=1, le=100)
+    per_page: int = Query(default=10, ge=1, le=100),
+    language: str = Query(
+        default="Java",
+        min_length=1,
+        max_length=50
+    ),
+    label: str = Query(
+        default="good first issue",
+        min_length=1,
+        max_length=50
+    ),
+    sort_by: str = Query(
+        default="created",
+        pattern="^(created|updated|comments)$"
+    )
 ):
     try:
-        result = await search_beginner_issues(per_page)
+        result = await search_beginner_issues(
+            per_page=per_page,
+            language=language,
+            label=label,
+            sort_by=sort_by
+        )
+
+        ranked_issues = rank_issues(result["issues"])
 
         return {
-            "total_count": result["total_count"],
+            "language": language,
+            "label": label,
+            "sort_by": sort_by,
+            "ranking": "recommendation_score",
+            "total_count": len(ranked_issues),
             "candidates_checked": result["candidates_checked"],
-            "issues": result["issues"]
+            "issues": ranked_issues
         }
 
     except httpx.HTTPStatusError as error:
         raise HTTPException(
             status_code=error.response.status_code,
-            detail="GitHub API returned an error."
+            detail=error.response.text
         )
 
     except httpx.RequestError:
@@ -58,3 +87,13 @@ async def get_issues(
             status_code=503,
             detail="Unable to connect to GitHub."
         )
+
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    return {
+        "cache_hits": CACHE_STATS["hits"],
+        "cache_misses": CACHE_STATS["misses"],
+        "repositories_cached": len(REPOSITORY_CACHE),
+        "cache_ttl_seconds": 1800
+    }
