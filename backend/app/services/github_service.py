@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+
 GITHUB_API_URL = "https://api.github.com"
 
 # Load the backend/.env file
@@ -14,9 +15,14 @@ load_dotenv(ENV_PATH)
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-# Repository language cache (30-minute expiry)
+
+# Repository cache (kept for compatibility with cache statistics)
 REPOSITORY_CACHE = {}
 CACHE_TTL = 30 * 60
+
+# Issue search cache (5-minute expiry)
+ISSUE_CACHE = {}
+ISSUE_CACHE_TTL = 5 * 60
 
 # Cache statistics
 CACHE_STATS = {
@@ -48,7 +54,7 @@ async def search_java_repositories(per_page: int = 10):
         "q": "language:Java stars:>50 archived:false",
         "sort": "updated",
         "order": "desc",
-        "per_page": per_page
+        "per_page": min(per_page, 100)
     }
 
     headers = get_github_headers()
@@ -72,9 +78,31 @@ async def search_beginner_issues(
     sort_by: str = "created"
 ):
     """
-    Search for beginner-friendly issues belonging to repositories
-    written primarily in the requested programming language.
+    Search GitHub for beginner-friendly issues.
+
+    Uses GitHub's language search qualifier and caches results
+    to reduce unnecessary API requests.
     """
+
+    # Create a unique cache key for each search configuration
+    cache_key = (
+        per_page,
+        language.lower(),
+        label.lower(),
+        sort_by
+    )
+
+    # Check whether valid cached results exist
+    cached_data = ISSUE_CACHE.get(cache_key)
+
+    if (
+        cached_data is not None
+        and time.time() - cached_data["timestamp"] < ISSUE_CACHE_TTL
+    ):
+        CACHE_STATS["hits"] += 1
+        return cached_data["data"]
+
+    CACHE_STATS["misses"] += 1
 
     url = f"{GITHUB_API_URL}/search/issues"
 
@@ -85,7 +113,7 @@ async def search_beginner_issues(
         ),
         "sort": sort_by,
         "order": "desc",
-        "per_page": 100
+        "per_page": min(per_page, 100)
     }
 
     headers = get_github_headers()
@@ -100,76 +128,36 @@ async def search_beginner_issues(
         response.raise_for_status()
 
         result = response.json()
-        candidate_issues = result["items"]
-
-        matching_issues = []
-        checked_repositories = {}
-
-        for issue in candidate_issues:
-            repository_url = issue["repository_url"]
-
-            if repository_url not in checked_repositories:
-                cached_data = REPOSITORY_CACHE.get(repository_url)
-
-                # Reuse cached information if it is still valid
-                if (
-                    cached_data is not None
-                    and time.time() - cached_data["timestamp"] < CACHE_TTL
-                ):
-                    CACHE_STATS["hits"] += 1
-                    repository_language = cached_data["language"]
-
-                else:
-                    CACHE_STATS["misses"] += 1
-
-                    repo_response = await client.get(
-                        repository_url,
-                        headers=headers
-                    )
-
-                    repo_response.raise_for_status()
-
-                    repository = repo_response.json()
-                    repository_language = repository.get("language")
-
-                    # Store fresh repository information
-                    REPOSITORY_CACHE[repository_url] = {
-                        "language": repository_language,
-                        "timestamp": time.time()
-                    }
-
-                checked_repositories[repository_url] = repository_language
-
-            repository_language = checked_repositories[repository_url]
-
-            if (
-                repository_language
-                and repository_language.lower() == language.lower()
-            ):
-                matching_issues.append(issue)
-
-            if len(matching_issues) >= per_page:
-                break
+        candidate_issues = result.get("items", [])
 
         # Prepare a clean response
         cleaned_issues = []
 
-        for issue in matching_issues:
+        for issue in candidate_issues:
             cleaned_issues.append({
                 "title": issue["title"],
                 "repository": issue["repository_url"].split("/repos/")[-1],
                 "issue_number": issue["number"],
                 "url": issue["html_url"],
                 "labels": [
-                    label["name"] for label in issue["labels"]
+                    issue_label["name"]
+                    for issue_label in issue.get("labels", [])
                 ],
                 "created_at": issue["created_at"],
                 "updated_at": issue["updated_at"],
                 "body": issue.get("body") or ""
             })
 
-        return {
+        data = {
             "total_count": len(cleaned_issues),
             "candidates_checked": len(candidate_issues),
             "issues": cleaned_issues
         }
+
+        # Store results in cache
+        ISSUE_CACHE[cache_key] = {
+            "data": data,
+            "timestamp": time.time()
+        }
+
+        return data

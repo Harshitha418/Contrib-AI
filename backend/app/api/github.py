@@ -1,14 +1,20 @@
 
-from fastapi import APIRouter, HTTPException, Query
 import httpx
+
+from fastapi import APIRouter, HTTPException, Query
+
 from app.services.recommendation_service import rank_issues
 
 from app.services.github_service import (
     search_java_repositories,
     search_beginner_issues,
     CACHE_STATS,
-    REPOSITORY_CACHE
+    REPOSITORY_CACHE,
+    CACHE_TTL,
+    ISSUE_CACHE,
+    ISSUE_CACHE_TTL
 )
+
 
 router = APIRouter()
 
@@ -79,7 +85,7 @@ async def get_issues(
     except httpx.HTTPStatusError as error:
         raise HTTPException(
             status_code=error.response.status_code,
-            detail=error.response.text
+            detail="GitHub API returned an error."
         )
 
     except httpx.RequestError:
@@ -95,5 +101,7 @@ async def get_cache_stats():
         "cache_hits": CACHE_STATS["hits"],
         "cache_misses": CACHE_STATS["misses"],
         "repositories_cached": len(REPOSITORY_CACHE),
-        "cache_ttl_seconds": 1800
+        "issues_cached": len(ISSUE_CACHE),
+        "repository_cache_ttl_seconds": CACHE_TTL,
+        "issue_cache_ttl_seconds": ISSUE_CACHE_TTL
     }
