@@ -1,4 +1,3 @@
-
 import httpx
 
 from fastapi import APIRouter, HTTPException, Query
@@ -60,6 +59,10 @@ async def get_issues(
     sort_by: str = Query(
         default="created",
         pattern="^(created|updated|comments)$"
+    ),
+    keyword: str = Query(
+        default="",
+        max_length=100
     )
 ):
     try:
@@ -67,7 +70,8 @@ async def get_issues(
             per_page=per_page,
             language=language,
             label=label,
-            sort_by=sort_by
+            sort_by=sort_by,
+            keyword=keyword
         )
 
         ranked_issues = rank_issues(result["issues"])
@@ -76,8 +80,9 @@ async def get_issues(
             "language": language,
             "label": label,
             "sort_by": sort_by,
+            "keyword": keyword,
             "ranking": "recommendation_score",
-            "total_count": len(ranked_issues),
+            "total_count": result["total_count"],
             "candidates_checked": result["candidates_checked"],
             "issues": ranked_issues
         }

@@ -778,3 +778,237 @@ button {
   text-align: left;
 }
 }
+/* ================================
+   EXPLORE ISSUES PAGE
+================================ */
+
+.explore-page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.page-eyebrow {
+  color: var(--purple);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+
+.page-heading h1 {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+.page-description {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.explore-filters {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+}
+
+.filter-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.filter-heading svg {
+  color: var(--purple);
+}
+
+.filter-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.filter-group label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.filter-group select {
+  width: 100%;
+  padding: 12px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  outline: none;
+  font-size: 13px;
+}
+
+.filter-group select:focus {
+  border-color: var(--purple);
+}
+
+.explore-results-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explore-results-heading h2 {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.explore-results-heading p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.explore-page .issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explore-page .issue-card {
+  padding: 22px;
+  transition: border-color 0.2s ease,
+              transform 0.2s ease;
+}
+
+.explore-page .issue-card:hover {
+  border-color: var(--purple);
+  transform: translateY(-2px);
+}
+
+.explore-page .issue-card-top h3 {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+
+.explore-page .issue-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.explore-page .loading-icon {
+  color: var(--purple);
+  animation: explore-spin 1.2s linear infinite;
+}
+
+@keyframes explore-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .filter-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .explore-page .issue-card-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+/* Explore Issues Keyword Search */
+
+.explore-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.explore-search:focus-within {
+  border-color: var(--purple);
+}
+
+.explore-search > svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.explore-search input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.explore-search input::placeholder {
+  color: var(--muted);
+}
+
+.explore-search .primary-button {
+  flex-shrink: 0;
+}
+
+.clear-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+}
+
+.clear-search:hover {
+  color: var(--text);
+}
+
+@media (max-width: 600px) {
+  .explore-search {
+    flex-wrap: wrap;
+  }
+
+  .explore-search input {
+    width: 70%;
+  }
+
+  .explore-search .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

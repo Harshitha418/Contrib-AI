@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 // Fetch Java repositories
@@ -20,6 +19,7 @@ export const fetchIssues = async (options = {}) => {
       language: options.language ?? "Java",
       label: options.label ?? "good first issue",
       sort_by: options.sortBy ?? "created",
+      keyword: options.keyword ?? "",
     },
   });
 

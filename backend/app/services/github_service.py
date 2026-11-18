@@ -1,4 +1,3 @@
-
 import os
 import time
 from pathlib import Path
@@ -16,7 +15,7 @@ load_dotenv(ENV_PATH)
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 
-# Repository cache (kept for compatibility with cache statistics)
+# Repository cache
 REPOSITORY_CACHE = {}
 CACHE_TTL = 30 * 60
 
@@ -75,21 +74,30 @@ async def search_beginner_issues(
     per_page: int = 10,
     language: str = "Java",
     label: str = "good first issue",
-    sort_by: str = "created"
+    sort_by: str = "created",
+    keyword: str = ""
 ):
     """
     Search GitHub for beginner-friendly issues.
 
-    Uses GitHub's language search qualifier and caches results
-    to reduce unnecessary API requests.
+    Supports:
+    - Programming language
+    - Issue label
+    - Sorting
+    - Keyword search in issue titles and descriptions
+
+    Uses caching to reduce unnecessary API requests.
     """
+
+    keyword = keyword.strip()
 
     # Create a unique cache key for each search configuration
     cache_key = (
         per_page,
         language.lower(),
         label.lower(),
-        sort_by
+        sort_by,
+        keyword.lower()
     )
 
     # Check whether valid cached results exist
@@ -106,11 +114,24 @@ async def search_beginner_issues(
 
     url = f"{GITHUB_API_URL}/search/issues"
 
+    # Build GitHub search query
+    query_parts = [
+        "is:issue",
+        "is:open",
+        f'label:"{label}"',
+        "no:assignee",
+        f"language:{language}"
+    ]
+
+    # Add keyword search when provided
+    if keyword:
+        query_parts.insert(
+            0,
+            f"{keyword} in:title,body"
+        )
+
     params = {
-        "q": (
-            f'is:issue is:open label:"{label}" '
-            f'no:assignee language:{language}'
-        ),
+        "q": " ".join(query_parts),
         "sort": sort_by,
         "order": "desc",
         "per_page": min(per_page, 100)
@@ -149,7 +170,10 @@ async def search_beginner_issues(
             })
 
         data = {
-            "total_count": len(cleaned_issues),
+            "total_count": result.get(
+                "total_count",
+                len(cleaned_issues)
+            ),
             "candidates_checked": len(candidate_issues),
             "issues": cleaned_issues
         }
