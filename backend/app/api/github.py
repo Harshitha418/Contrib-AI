@@ -74,14 +74,17 @@ async def get_issues(
             keyword=keyword
         )
 
-        ranked_issues = rank_issues(result["issues"])
+        ranked_issues = rank_issues(
+            result["issues"],
+            keyword=keyword
+        )
 
         return {
             "language": language,
             "label": label,
             "sort_by": sort_by,
             "keyword": keyword,
-            "ranking": "recommendation_score",
+            "ranking": "keyword_relevance_then_recommendation_score",
             "total_count": result["total_count"],
             "candidates_checked": result["candidates_checked"],
             "issues": ranked_issues

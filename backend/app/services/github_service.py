@@ -42,6 +42,44 @@ def get_github_headers():
     return headers
 
 
+async def get_repository_language(repository: str):
+    """
+    Retrieve the primary programming language of a GitHub repository.
+
+    Repository language information is cached for 30 minutes.
+    """
+
+    cached_data = REPOSITORY_CACHE.get(repository)
+
+    if (
+        cached_data is not None
+        and time.time() - cached_data["timestamp"] < CACHE_TTL
+    ):
+        CACHE_STATS["hits"] += 1
+        return cached_data["language"]
+
+    CACHE_STATS["misses"] += 1
+
+    url = f"{GITHUB_API_URL}/repos/{repository}"
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            url,
+            headers=get_github_headers()
+        )
+
+        response.raise_for_status()
+
+        repository_data = response.json()
+        language = repository_data.get("language")
+
+        REPOSITORY_CACHE[repository] = {
+            "language": language,
+            "timestamp": time.time()
+        }
+
+        return language
+
 async def search_java_repositories(per_page: int = 10):
     """
     Search GitHub for active public Java repositories.
@@ -116,12 +154,11 @@ async def search_beginner_issues(
 
     # Build GitHub search query
     query_parts = [
-        "is:issue",
-        "is:open",
-        f'label:"{label}"',
-        "no:assignee",
-        f"language:{language}"
-    ]
+    "is:issue",
+    "is:open",
+    f'label:"{label}"',
+    "no:assignee"
+]
 
     # Add keyword search when provided
     if keyword:

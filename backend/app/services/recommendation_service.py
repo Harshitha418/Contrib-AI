@@ -1,4 +1,8 @@
 
+import re
+from datetime import datetime, timezone
+
+
 # Issue recommendation scoring criteria
 
 SCORING_WEIGHTS = {
@@ -11,23 +15,16 @@ SCORING_WEIGHTS = {
 
 
 def get_recommendation_level(score: int):
-    """
-    Classify an issue based on its recommendation score.
-    """
+    """Classify an issue based on its recommendation score."""
 
     if score >= 80:
         return "Excellent match"
-
     elif score >= 60:
         return "Good match"
-
     elif score >= 40:
         return "Moderate match"
 
     return "Low match"
-
-
-from datetime import datetime, timezone
 
 
 def score_issue(issue: dict):
@@ -95,9 +92,74 @@ def score_issue(issue: dict):
         "reasons": reasons
     }
 
-def rank_issues(issues: list):
+
+def calculate_keyword_relevance(issue: dict, keyword: str):
     """
-    Score and rank GitHub issues from highest to lowest relevance.
+    Calculate how closely an issue matches the user's search keyword.
+
+    Title matches receive higher scores than description-only matches.
+    """
+
+    if not keyword or not keyword.strip():
+        return 0
+
+    keyword = keyword.strip().lower()
+
+    title = (issue.get("title") or "").lower()
+    description = (issue.get("body") or "").lower()
+
+    # Extract individual words from the keyword
+    terms = re.findall(r"\w+", keyword)
+
+    if not terms:
+        return 0
+
+    title_matches = sum(
+        1 for term in terms
+        if re.search(rf"\b{re.escape(term)}\b", title)
+    )
+
+    body_matches = sum(
+        1 for term in terms
+        if re.search(rf"\b{re.escape(term)}\b", description)
+    )
+
+    # Exact phrase match in title
+    if keyword in title:
+        return 60
+
+    # All individual terms appear in title
+    if title_matches == len(terms):
+        return 50
+
+    # Partial match in title
+    if title_matches > 0:
+        return 25
+
+    # Exact phrase match in description
+    if keyword in description:
+        return 15
+
+    # All individual terms appear in description
+    if body_matches == len(terms):
+        return 10
+
+    # Partial match in description
+    if body_matches > 0:
+        return 5
+
+    return 0
+
+
+def rank_issues(issues: list, keyword: str = ""):
+    """
+    Score and rank GitHub issues.
+
+    When a keyword is provided:
+    1. Rank by keyword relevance.
+    2. Use recommendation score as the secondary ranking.
+
+    Without a keyword, preserve the original recommendation ranking.
     """
 
     ranked_issues = []
@@ -105,18 +167,30 @@ def rank_issues(issues: list):
     for issue in issues:
         recommendation = score_issue(issue)
 
+        keyword_score = calculate_keyword_relevance(
+            issue,
+            keyword
+        )
+
         ranked_issue = {
             **issue,
+            "score": recommendation["score"],
             "recommendation_score": recommendation["score"],
+            "recommendation": recommendation["recommendation"],
             "recommendation_level": recommendation["recommendation"],
-            "recommendation_reasons": recommendation["reasons"]
+            "reasons": recommendation["reasons"],
+            "recommendation_reasons": recommendation["reasons"],
+            "keyword_relevance_score": keyword_score
         }
 
         ranked_issues.append(ranked_issue)
 
-    # Sort issues by recommendation score (highest first)
+    # Keyword relevance first, recommendation score second
     ranked_issues.sort(
-        key=lambda issue: issue["recommendation_score"],
+        key=lambda issue: (
+            issue["keyword_relevance_score"],
+            issue["recommendation_score"]
+        ),
         reverse=True
     )
 
