@@ -1,3 +1,4 @@
+
 import os
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ load_dotenv(ENV_PATH)
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 
-# Repository cache
+# Repository cache (30-minute expiry)
 REPOSITORY_CACHE = {}
 CACHE_TTL = 30 * 60
 
@@ -80,6 +81,7 @@ async def get_repository_language(repository: str):
 
         return language
 
+
 async def search_java_repositories(per_page: int = 10):
     """
     Search GitHub for active public Java repositories.
@@ -108,6 +110,7 @@ async def search_java_repositories(per_page: int = 10):
         return response.json()
 
 
+
 async def search_beginner_issues(
     per_page: int = 10,
     language: str = "Java",
@@ -124,10 +127,12 @@ async def search_beginner_issues(
     - Sorting
     - Keyword search in issue titles and descriptions
 
-    Uses caching to reduce unnecessary API requests.
+    Verifies the actual primary language of each repository.
+    Uses pagination and caching to reduce unnecessary API requests.
     """
 
     keyword = keyword.strip()
+    per_page = min(max(per_page, 1), 100)
 
     # Create a unique cache key for each search configuration
     cache_key = (
@@ -154,11 +159,11 @@ async def search_beginner_issues(
 
     # Build GitHub search query
     query_parts = [
-    "is:issue",
-    "is:open",
-    f'label:"{label}"',
-    "no:assignee"
-]
+        "is:issue",
+        "is:open",
+        f'label:"{label}"',
+        "no:assignee"
+    ]
 
     # Add keyword search when provided
     if keyword:
@@ -167,58 +172,99 @@ async def search_beginner_issues(
             f"{keyword} in:title,body"
         )
 
-    params = {
-        "q": " ".join(query_parts),
-        "sort": sort_by,
-        "order": "desc",
-        "per_page": min(per_page, 100)
-    }
-
     headers = get_github_headers()
 
+    # GitHub Search API allows up to 100 results per page
+    github_page_size = 100
+    page = 1
+
+    cleaned_issues = []
+    candidates_checked = 0
+    github_total_count = 0
+
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(
-            url,
-            params=params,
-            headers=headers
-        )
 
-        response.raise_for_status()
+        # GitHub Search API supports a maximum of 10 pages
+        while page <= 10 and len(cleaned_issues) < per_page:
 
-        result = response.json()
-        candidate_issues = result.get("items", [])
+            params = {
+                "q": " ".join(query_parts),
+                "sort": sort_by,
+                "order": "desc",
+                "per_page": github_page_size,
+                "page": page
+            }
 
-        # Prepare a clean response
-        cleaned_issues = []
+            response = await client.get(
+                url,
+                params=params,
+                headers=headers
+            )
 
-        for issue in candidate_issues:
-            cleaned_issues.append({
-                "title": issue["title"],
-                "repository": issue["repository_url"].split("/repos/")[-1],
-                "issue_number": issue["number"],
-                "url": issue["html_url"],
-                "labels": [
-                    issue_label["name"]
-                    for issue_label in issue.get("labels", [])
-                ],
-                "created_at": issue["created_at"],
-                "updated_at": issue["updated_at"],
-                "body": issue.get("body") or ""
-            })
+            response.raise_for_status()
 
-        data = {
-            "total_count": result.get(
-                "total_count",
-                len(cleaned_issues)
-            ),
-            "candidates_checked": len(candidate_issues),
-            "issues": cleaned_issues
-        }
+            result = response.json()
 
-        # Store results in cache
-        ISSUE_CACHE[cache_key] = {
-            "data": data,
-            "timestamp": time.time()
-        }
+            candidate_issues = result.get("items", [])
 
-        return data
+            github_total_count = result.get("total_count", 0)
+
+            candidates_checked += len(candidate_issues)
+
+            # Stop if GitHub has no more results
+            if not candidate_issues:
+                break
+
+            for issue in candidate_issues:
+
+                repository = issue["repository_url"].split("/repos/")[-1]
+
+                # Fetch the repository's actual primary language
+                repository_language = await get_repository_language(
+                    repository
+                )
+
+                # Keep only repositories matching the selected language
+                if (
+                    (repository_language or "").lower()
+                    != language.lower()
+                ):
+                    continue
+
+                cleaned_issues.append({
+                    "title": issue["title"],
+                    "repository": repository,
+                    "repository_language": repository_language,
+                    "issue_number": issue["number"],
+                    "url": issue["html_url"],
+                    "labels": [
+                        issue_label["name"]
+                        for issue_label in issue.get("labels", [])
+                    ],
+                    "created_at": issue["created_at"],
+                    "updated_at": issue["updated_at"],
+                    "body": issue.get("body") or ""
+                })
+
+                # Stop once the requested number of matches is collected
+                if len(cleaned_issues) >= per_page:
+                    break
+
+            # Move to the next GitHub search page
+            page += 1
+
+    data = {
+        "total_count": len(cleaned_issues),
+        "github_total_count": github_total_count,
+        "candidates_checked": candidates_checked,
+        "pages_checked": page - 1,
+        "issues": cleaned_issues
+    }
+
+    # Store results in cache
+    ISSUE_CACHE[cache_key] = {
+        "data": data,
+        "timestamp": time.time()
+    }
+
+    return data

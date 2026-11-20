@@ -85,6 +85,8 @@ async def get_issues(
             "sort_by": sort_by,
             "keyword": keyword,
             "ranking": "keyword_relevance_then_recommendation_score",
+            "github_total_count": result["github_total_count"],
+            "pages_checked": result["pages_checked"],
             "total_count": result["total_count"],
             "candidates_checked": result["candidates_checked"],
             "issues": ranked_issues
